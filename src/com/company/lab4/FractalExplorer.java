@@ -13,6 +13,7 @@ public class FractalExplorer {
     private JImageDisplay image;
     private FractalGenerator fractal;
     private Rectangle2D.Double range;
+    private int rowsRemaining;
 
     public FractalExplorer(int size) {
         displaySize = size;
@@ -21,6 +22,10 @@ public class FractalExplorer {
         fractal.getInitialRange(range);
         image = new JImageDisplay(displaySize, displaySize);
     }
+
+    private JComboBox comboBox = new JComboBox();
+    private JButton saveButton = new JButton("Save");
+    private JButton resetButton = new JButton("Reset");
 
     public void createAndShowGUI(){
         image.setLayout(new BorderLayout());
@@ -55,28 +60,44 @@ public class FractalExplorer {
         frame.setResizable(false);
     }
 
+    private void enableUI(boolean val) {
+        comboBox.setEnabled(val);
+        resetButton.setEnabled(val);
+        saveButton.setEnabled(val);
+    }
+
     private void drawFractal()
     {
         /** Loop through every pixel in the display */
-        for (int x=0; x<displaySize; x++){
-            for (int y=0; y<displaySize; y++){
-                double xCoord = fractal.getCoord(
-                        range.x, range.x + range.width, displaySize, x);
-                double yCoord = fractal.getCoord(
-                        range.y, range.y + range.height, displaySize, y);
-                int iteration = fractal.numIterations(xCoord, yCoord);
-                if (iteration == -1) {
-                    image.drawPixel(x, y, 0);
-                }
-                else {
-                    float hue = 0.7f + (float) iteration / 200f;
-                    int rgbColor = Color.HSBtoRGB(hue, 1f, 1f);
-                    image.drawPixel(x, y, rgbColor);
-                }
+//        for (int x=0; x<displaySize; x++){
+//            for (int y=0; y<displaySize; y++){
+//                double xCoord = fractal.getCoord(
+//                        range.x, range.x + range.width, displaySize, x);
+//                double yCoord = fractal.getCoord(
+//                        range.y, range.y + range.height, displaySize, y);
+//                int iteration = fractal.numIterations(xCoord, yCoord);
+//                if (iteration == -1) {
+//                    image.drawPixel(x, y, 0);
+//                }
+//                else {
+//                    float hue = 0.7f + (float) iteration / 200f;
+//                    int rgbColor = Color.HSBtoRGB(hue, 1f, 1f);
+//                    image.drawPixel(x, y, rgbColor);
+//                }
+//
+//            }
+//        }
+//        image.repaint();
 
-            }
+        enableUI(false);
+
+        rowsRemaining = displaySize;
+
+        /** Loop through every row in the display */
+        for (int x = 0; x < displaySize; x++) {
+            FractalWorker drawRow = new FractalWorker(x);
+            drawRow.execute();
         }
-        image.repaint();
     }
 
     private class Handler implements ActionListener
@@ -123,6 +144,7 @@ public class FractalExplorer {
         @Override
         public void mouseClicked(MouseEvent e)
         {
+            if (rowsRemaining != 0) return;
             int x = e.getX();
             double xCoord = fractal.getCoord(
                     range.x, range.x + range.width, displaySize, x);
@@ -140,4 +162,65 @@ public class FractalExplorer {
         displayExplorer.createAndShowGUI();
         displayExplorer.drawFractal();
     }
+
+    private class FractalWorker extends SwingWorker<Object, Object>{
+        int yCoordInt;
+        int[] RGBList;
+
+        private FractalWorker(int row){
+            yCoordInt = row;
+        }
+
+        protected Object doInBackground() {
+            RGBList = new int[displaySize];
+
+            for (int i = 0; i < RGBList.length; i++) {
+                /**
+                 * Find the corresponding coordinates xCoord and yCoord
+                 * in the fractal's display area.
+                 */
+                double xCoord = fractal.getCoord(range.x,
+                        range.x + range.width, displaySize, i);
+                double yCoord = fractal.getCoord(range.y,
+                        range.y + range.height, displaySize, yCoordInt);
+
+                /**
+                 * Compute the number of iterations for the coordinates in
+                 * the fractal's display area.
+                 */
+                int iteration = fractal.numIterations(xCoord, yCoord);
+
+                /** If number of iterations is -1, set the pixel to black. */
+                if (iteration == -1){
+                    RGBList[i] = 0;
+                }
+
+                else {
+                    /**
+                     * Otherwise, choose a hue value based on the number
+                     * of iterations.
+                     */
+                    float hue = 0.7f + (float) iteration / 200f;
+                    int rgbColor = Color.HSBtoRGB(hue, 1f, 1f);
+
+                    /** Update the display with the color for each pixel. */
+                    RGBList[i] = rgbColor;
+                }
+            }
+            return null;
+        }
+
+        protected void done(){
+            for (int i = 0; i < RGBList.length; i++) {
+                image.drawPixel(i, yCoordInt, RGBList[i]);
+            }
+
+            image.repaint(0, 0, yCoordInt, displaySize, 1);
+            rowsRemaining--;
+            if (rowsRemaining == 0) {
+                enableUI(true);
+            }
+        }
+    }
+
 }
